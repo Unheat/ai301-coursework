@@ -148,8 +148,8 @@ decode_responses=True)`), only `attr-defined` removed from the
 `api.routes.health` override, and the test plan executed as written
 (regression test failing on unfixed `main` with the issue's exact
 503/`unhealthy` body, passing after; mypy erroring with the
-suppression stripped on `main`, clean after; unit suite 377 passed /
-53 xfailed). Two small additions beyond the plan's letter, neither
+suppression stripped on `main`, clean after; unit suite 375 passed /
+2 deselected / 53 xfailed). Two small additions beyond the plan's letter, neither
 changing the approach: (1) while removing `attr-defined`, I also
 updated the explanatory comment block above that override in
 `pyproject.toml`, which named the now-removed `attr-defined` -> #62
