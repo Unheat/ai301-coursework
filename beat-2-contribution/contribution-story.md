@@ -1,4 +1,4 @@
-# Contribution: [Issue Title]
+# Contribution: Remove all os.chdir in favor of cwd/working directory in execute
 
 Path: `beat-2-contribution/contribution-story.md`
 
@@ -8,10 +8,9 @@ format criteria grade exactly that. Your course repo link is the whole submissio
 files and no evidence uploads are part of Assignment 5.
 
 **Contribution Number:** [1]
-**Student:** [Student name]
-**GitHub Username:** [your GitHub username, exactly as it appears on your profile - no @, no
-profile URL. Your comments upstream are identified by this name.]
-**Issue:** [GitHub issue link]
+**Student:** An Dang
+**GitHub Username:** Unheat
+**Issue:** https://github.com/opensearch-project/opensearch-build/issues/775
 **Pull Request:** [GitHub PR link, once opened]
 
 One repository, built across units 5 to 8, telling the whole story of your real
@@ -55,10 +54,9 @@ happened; these entries are the toolkit's own timeline.
 All four entries are graded. Keep every heading below, and fill each
 one in the week it belongs to.
 
-**Unit 5: [one line on the tool work]**
+**Unit 5: Building and tuning the issue-scout across GitHub and tracker candidates**
 
-[2-4 sentences: what you built (the scout, your strategy), what broke
-or fell short, what changed because of it.]
+I built the issue-scout skill by pairing broad GitHub CLI searches with deterministic ranking filters and Claude-driven rubric grading. During the initial wild scan, passing "stars:>1000" to `gh search issues` broke because GitHub's issue search API lacks a repository stars filter and treated "1000" as a plain text query matching issue #1000 in small repositories. In direct grading on tracker picks, the scout caught unmerged pull requests on three seemingly open Backstage issues, preventing duplicate work, before successfully validating and accepting `opensearch-project/opensearch-build#775`.
 
 **Unit 6: [one line on the tool work]**
 
