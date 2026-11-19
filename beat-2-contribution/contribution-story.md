@@ -11,7 +11,7 @@ files and no evidence uploads are part of Assignment 5.
 **Student:** An Dang
 **GitHub Username:** Unheat
 **Issue:** https://github.com/opensearch-project/opensearch-build/issues/775
-**Pull Request:** [GitHub PR link, once opened]
+**Pull Request:** not opened yet — planned for unit 7, after the patch and the ship-gate.
 
 One repository, built across units 5 to 8, telling the whole story of your real
 contribution. Fill it as you work, not at the end — the sections below ask for evidence that
@@ -24,39 +24,13 @@ just numbers them.
 
 ## Toolkit
 
-Every story section below, from Why I Chose This Issue through Pull
-Request, ends with a Toolkit block: which tool did that phase's work
-and how you used it, what it produced, what difficulties or
-shortcomings it presented, and what you changed or would change
-because of them. Together the blocks are the thread the rubric's
-Toolkit points read, and they are the raw material for your unit-9
-portfolio, so keep them current as you work rather than
-reconstructing them later.
+Every section from Why I Chose This Issue through Pull Request ends with a Toolkit block: which tool did that phase's work, what it produced, what fought it, and what changed because of it. Below the blocks, one dated entry per week of tool work.
 
-A Toolkit block looks like this (copy it into each story section and
-fill it there):
-
-```text
-**Toolkit**
-
-- Tool: [which tool did this phase's work, and how you used it]
-- What it produced: [described in a sentence or a short excerpt]
-- Difficulties: [what fought you or fell short, or "none met"]
-- What changed: [the patch, revision, or workaround, what you would
-  update, or "nothing"]
-```
-
-This section also keeps one short dated entry per week of tool work,
-starting below: what you built or changed that week, what broke, and
-what you changed because of it. The blocks tell the story where it
-happened; these entries are the toolkit's own timeline.
-
-All four entries are graded. Keep every heading below, and fill each
-one in the week it belongs to.
+All four entries are graded. Keep every heading, fill each in the week it belongs to.
 
 **Unit 5: Building and tuning the issue-scout across GitHub and tracker candidates**
 
-I built the issue-scout skill by pairing broad GitHub CLI searches with deterministic ranking filters and Claude-driven rubric grading. During the first wild scan, passing `stars:>1000` to `gh search issues` broke because GitHub's issue search has no repository-stars filter and treated "1000" as a literal keyword, so I replaced it with repository and organization qualifiers in `search-strategy.md`. Direct grading on tracker picks caught unmerged pull requests on three seemingly open Backstage issues, preventing duplicate work. Grading the Issue Selection candidates then exposed a real gap: the scout accepted a closed issue (`pytorch/pytorch#97469`) because the rubric had no state check, so I added a required "Issue still open and unfixed" check plus an "Issue state" row to the evidence guide, kept the 20-bundle eval at 20/20, and re-graded to leave `pytorch/pytorch#113040` accepted.
+I built the issue-scout skill by pairing broad GitHub CLI searches with deterministic ranking filters and Claude-driven rubric grading. During the first wild scan, passing `stars:>1000` to `gh search issues` broke because GitHub's issue search has no repository-stars filter and treated "1000" as a literal keyword — four of the top five results were literally issue `#1000` in repos with 1–80 stars. The fix is in `search-strategy.md` and it is visible there: every star term is gone, replaced by `--owner`-scoped queries (`pytorch`, `vllm-project`, `opensearch-project`, `backstage`) plus one keyword fallback, and star count moved out of search entirely into grading time, because the search result object has no star field. Direct grading on tracker picks caught unmerged pull requests on three seemingly open Backstage issues, preventing duplicate work. Grading the Issue Selection candidates then exposed a real gap: the scout accepted a closed issue (`pytorch/pytorch#97469`) because the rubric had no state check, so I added a required "Issue still open and unfixed" check plus an "Issue state" row to the evidence guide, kept the 20-bundle eval at 20/20, and re-graded to leave `pytorch/pytorch#113040` accepted.
 
 **Unit 6: Voice guard, repo memory, and a scope check that stopped rejecting the wild**
 
