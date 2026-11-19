@@ -62,6 +62,7 @@ free. Verify both.
 
 | Signal | On github.com | In the eval bundle |
 |---|---|---|
+| Issue state | the `Open` / `Closed as completed` badge next to the issue title; a merged linked PR means the fix already landed even if the issue was left open | "state open/closed" on the issue line, and "(merged)" on linked PRs under Repo facts |
 | Assignee | the Assignees box in the issue's right sidebar | "this issue: assignees:" under Repo facts |
 | Linked PRs | the Development box in the issue's right sidebar lists formally linked PRs: an open one is an active claim, a closed unmerged one is an abandoned attempt. Not every PR gets formally linked; people often just mention their PR in the comments, so read the thread too, and when the sidebar and the thread disagree, believe the thread | "linked PRs:" with state per PR, plus any PRs mentioned in the Comments section |
 | Claim comments | read the thread for "I'll take this", "can I work on this", "working on this"; note the date and whether a maintainer answered | the Comments section |
