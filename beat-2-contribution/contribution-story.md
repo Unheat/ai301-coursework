@@ -36,15 +36,9 @@ I built the issue-scout skill by pairing broad GitHub CLI searches with determin
 
 I installed the voice guard as a PreToolUse hook over every outgoing `gh` body, promoted the three carried-forward voice guides into one canonical guide at `~/.claude/voice-guard/voice-guide.md`, and wrote the upstream section myself: claim, question and ping rules, each with a wrong/right pair. The wiring test passed in the way it is supposed to - the guard stopped a body-less `gh issue comment --help` with "no body the guard can read" - and the manual check on my real claim draft came back pass, which is how I knew the guide was binding rather than decorative. The memory file was the smaller job: I read `CONTRIBUTING.md` end to end first, then distilled only the conventions and the chdir/execute subsystem into `CLAUDE.local.md` (34 lines) and hid it with `.git/info/exclude` so it never enters the PR diff. The real correction was in the scout: my required `Issue scope` check rejected anything with an open edge, which is most honest wild work, so I replaced it with `scope-feasible` and moved the ambiguity into a difficulty note - `#775` came out **ambitious** because of one open design question (`WorkingDirectory`), and that question is now the first thing my claim asks.
 
-**Unit 7: [one line on the tool work]**
+**Unit 7: not yet started — patch branch, ship-gate and gate manifest come next week.**
 
-[2-4 sentences: the ship-gate and your gate manifest. What it produced
-on your real branch, what fought you, what changed because of it.]
-
-**Unit 8: [one line on the tool work]**
-
-[2-4 sentences: the PR-monitor and your playbook. What it read, what it
-drafted, what you did with the draft.]
+**Unit 8: not yet started — PR monitor and playbook come in the final week.**
 
 ---
 
@@ -71,26 +65,26 @@ I chose it to learn how a real Python CLI/build codebase threads a working direc
 
 **Problem Description**
 
-[In your own words, what is broken or missing?]
+`opensearch-build` changes the process's working directory with `os.chdir()` in its build, test and CI scripts. That directory is global to the process, so any code running in another thread sees the change, and a helper that saves and restores the directory still leaks while it is open. The issue asks to stop doing that and pass the directory explicitly to the command being executed instead.
 
 **Expected Behavior**
 
-[What should happen?]
+A command runs in the directory it is given, and the process's own working directory is never mutated. `execute(command, dir)` already behaves this way: it calls `subprocess.run(command, cwd=dir, ...)` and leaves `os.getcwd()` untouched.
 
 **Current Behavior**
 
-[What actually happens?]
+On `main` at `619c091b`, `os.chdir` is still called 31 times across 18 files — 9 occurrences in 6 files under `src/`, and 12 files under `tests/` that use it for fixtures. A thread started inside `WorkingDirectory(path)` reads that path as its cwd while the block is open, even though it never asked for it. Several call sites are redundant: `perf_test_cluster.start()`/`terminate()` `chdir` and then pass `cwd=os.getcwd()` to the same subprocess call.
 
 **Affected Components**
 
-[Which parts of the codebase are involved?]
+`src/system/working_directory.py` and `src/system/temporary_directory.py` (the helpers built on `chdir`), `src/system/execute.py` (the explicit-cwd API that already exists), `src/test_workflow/perf_test/perf_test_cluster.py` and `perf_test_suite.py`, `src/test_workflow/integ_test/integ_test_suite_opensearch.py` and `..._dashboards.py`, and the 12 test modules whose fixtures call `os.chdir`.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: `grep -rn "os\\.chdir" src tests` plus direct reads of the five `src/` files, and `gh` for the issue and linked-PR history.
+- What it produced: the 31 / 6 / 12 counts, the seven raw site paths, and the fact that `execute()` already takes `dir` — which is what makes this a migration rather than new plumbing.
+- Difficulties: the issue text is from 2021 and its paths predate the move of `test_workflow/` under `src/`, so the issue body could not be used as a map; every path had to come from the current tree.
+- What changed: my understanding went from "remove all chdir" (a refactor) to "three kinds of site, one of which is a design question" — which is what I put in the claim instead of guessing.
 
 ---
 
@@ -134,93 +128,119 @@ after    os.getcwd() = /private/tmp
 
 **Analysis**
 
-[Your analysis of the root cause: what is causing the issue, traced
-to the files and functions involved.]
+The root cause is not one bug but one pattern repeated: the process's working directory is used as an implicit parameter. `execute()` in `src/system/execute.py` already takes that parameter explicitly — `execute(command: str, dir: str, ...)` runs `subprocess.run(command, cwd=dir, ...)` — so a `chdir` before a call is redundant, and a `chdir` anywhere else silently changes the directory for every other thread in the process. My reproduction shows exactly that: a second thread inside a `WorkingDirectory` block reads the changed directory, not the one the process started in (`src/system/working_directory.py:17`).
+
+Reading the seven raw sites, they fall into three kinds:
+
+1. **Redundant**: `perf_test_cluster.py:75` and `:100` call `os.chdir(self.work_dir)` and then `subprocess.check_call(command, cwd=os.getcwd(), ...)` — the directory is already being passed, so the `chdir` only adds global state. `perf_test_suite.py:72` does the same with `WorkingDirectory` plus `cwd=current_workspace`.
+2. **Load-bearing**: `integ_test_suite_opensearch.py:100` and `integ_test_suite_opensearch_dashboards.py:103` `chdir` before `multi_execute_integtest_sh`, which resolves `ScriptFinder.find_integ_test_script(...)` and calls `execute(cmd, self.repo_work_dir, ...)`. `ScriptFinder` builds paths through `os.path.realpath`, so the `chdir` is likely redundant here too, but this is the one I will verify with a test before deleting it.
+3. **The contract itself**: `WorkingDirectory` and `TemporaryDirectory` exist to `chdir` (`working_directory.py:17,20`, `temporary_directory.py:51,64`). Removing those is a design decision, not a cleanup, which is why my claim asks the maintainer instead of assuming.
 
 **Proposed Solution**
 
-[High-level description of your fix approach, and what you are
-deliberately NOT changing.]
+Convert call sites from implicit to explicit working directories, in separate small PRs, and leave the helper contract alone until the maintainer answers:
+
+- PR 1 (mechanical): delete the redundant `chdir` calls in `perf_test_cluster.py` and `perf_test_suite.py`, passing `cwd=` where it is currently `cwd=os.getcwd()`.
+- PR 2 (needs proof): `integ_test` suites, after a test shows `ScriptFinder` returns an absolute path so `os.path.exists(script)` does not depend on cwd.
+- PR 3 (only if the maintainer wants it): `WorkingDirectory`/`TemporaryDirectory` removal or narrowing, with the four runners that use `WorkingDirectory` migrated in the same PR.
+
+Deliberately **not** changing: the end-state of `perf_test_suite.execute()`'s `finally: os.chdir(self.current_workspace)` until I know which caller relies on the process ending in the workspace root. That line is a post-condition, not an accident, and deleting it in a "cleanup" PR would be silent behaviour change.
 
 **Implementation Plan**
 
-1. [Modify file X to do Y]
-2. [Add or change Z]
-3. [Update tests]
+1. `src/test_workflow/perf_test/perf_test_cluster.py` — remove `os.chdir(self.work_dir)` from `start()` and `terminate()`; both already run the command with `cwd=`, so pass `cwd=self.work_dir`.
+2. `src/test_workflow/perf_test/perf_test_suite.py` — replace the `with WorkingDirectory(current_workspace)` wrapper with the `cwd=current_workspace` the calls already pass; keep the `finally` line and document why.
+3. `src/test_workflow/integ_test/integ_test_suite_opensearch.py` and `..._dashboards.py` — add a test proving the script path is absolute, then drop the `chdir` at lines 100/103.
+4. `tests/` — update the affected fixtures to pass paths explicitly (or use `monkeypatch.chdir` where the fixture genuinely needs a directory), so no test depends on leaked cwd.
+5. Run the targeted suites, then the full suite, plus `flake8`/`mypy`; open PR 1 first, and reference this issue plus the maintainer question.
 
-[Record deviations here as they happen: what changed mid-build and
-why. A recorded deviation is honest work; silent drift is not.]
+Deviations: none yet — code work starts in unit 7. I will record each change here as it happens rather than batching at the end.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: plan-check (wild scope, installed in unit 6) — not run yet; the plan above is the draft it will grade before I post it on the issue in unit 7.
+- What it produced: nothing yet — the plan is written from the reproduction evidence and the call-site reading, not from the tool.
+- Difficulties: none yet; the honest gap is that plan-check has not seen this plan, so its rubric rows (bounded scope, traced analysis) are unverified.
+- What changed: nothing yet; when plan-check runs, any row it fails changes this section rather than being argued with.
 
 ---
 
 ## Testing Strategy
 
-[What observable checks prove the fix: your reproduction steps re-run
-against the built change (before and after), and the repo's own test
-suite or checks with the outcome shown. "Tests pass" with nothing
-observable named is not a strategy.]
+Two halves, because "the fix works" and "nothing else broke" are different claims.
+
+**Half 1: the reproduction, re-run before and after.** The check is the same script from the Reproduction Process section: open a `WorkingDirectory` block, read `os.getcwd()` from a second thread, and assert the thread still sees the process's original directory after the change. Before: `thread sees chdir'd dir? True`. After: expected `False`, plus `grep -rc "os\.chdir" src` dropping from **9 occurrences in 6 files** to whatever remains (the helpers, if the maintainer keeps them). That is observable in the PR diff and does not depend on anyone trusting me.
+
+**Half 2: the repo's own checks.** From `CLAUDE.local.md` (CONTRIBUTING/DEVELOPER_GUIDE):
+
+```bash
+pipenv run pytest tests/tests_test_workflow/test_perf_workflow -q   # the suites I touch first
+pipenv run pytest                                                    # full suite
+pipenv run flake8 && pipenv run isort --check . && pipenv run mypy . # pre-commit's checks
+```
+
+The perf suites spawn `pipenv install` and real subprocesses, so I will run the two touched modules directly too, and paste the actual pass/fail summary rather than the word "tests pass".
+
+Honest status: **none of this has been run yet** — there is no patched branch, and a strategy section that shows green numbers today would be invented. The outputs land here and in the PR body when the patch exists.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: none yet — the commands come from the repo's `DEVELOPER_GUIDE.md` via my `CLAUDE.local.md`, not from a skill run.
+- What it produced: the command list above, copied from the guide rather than from memory.
+- Difficulties: the perf/integ suites are heavyweight (pipenv install, CDK, real clusters), so "run the tests" is not one command; I expect to run the touched modules first and the full suite last.
+- What changed: nothing yet; if a suite cannot run in this environment (no Docker/CDK), I will say which and why instead of claiming it passed.
 
 ---
 
 ## Implementation Notes
 
-[A running log, added to as you work. Date each entry. What you
-built, decisions you made when you made them, wrong turns included.]
+**[2026-11-01]**
 
-**[Date]**
+First wild scan. `stars:>1000` treated `1000` as a keyword, so four of the top five results were literally issue `#1000`. Three Backstage picks were rejected on unmerged PRs that no search result showed. Wrote the scan notes; did not touch the query file that day, which is the mistake I fix on 2026-11-19.
 
-[Entry]
+**[2026-11-11]**
 
-**[Date]**
+Direct grading accepted a closed issue (`pytorch/pytorch#97469`) because the rubric had no state row. Added **Issue still open and unfixed**, added the **Issue state** row to the evidence guide, and re-graded: `#113040` accept, `#97469` reject.
 
-[Entry]
+**[2026-11-16]**
+
+`#113040` was gone — open PR #204547 opened the day after I graded it. Re-picked `opensearch-build#775`; graded it plus `#6670` and `#2614`; replaced the strict `Issue scope` row with `scope-feasible` and moved ambiguity into a difficulty note. `#775` came out **ambitious** on one open question (`WorkingDirectory`).
+
+**[2026-11-18]**
+
+Posted the claim (guard pass). Reproduced on `619c091`: 31 `os.chdir` occurrences, 6 files under `src/`, 12 under `tests/`; a second thread sees the `chdir`'d directory; `execute()` already takes `dir`. Wrote `CLAUDE.local.md` (34 lines) so the repo's conventions and the chdir subsystem stop being re-learned each session.
+
+**[2026-11-19]**
+
+Grader feedback said the Unit 5 note documented the symptom but never named the corrective action, and that a reader could not tell whether the bug was still live. Checking the file showed something worse than an omission: `search-strategy.md` still contained the four `stars:>1000` queries the story said I had replaced. Rewrote the queries with `--owner` scoping, added a dated "What changed, and why" block to the file, and removed the leftover template scaffolding from this story. Lesson: when a note says "I changed X", open X and check — the file is the evidence, the note is only a claim.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: `grep` and direct file reads, plus `gh` for the issue history.
+- What it produced: the five dated entries above, each tied to a file or command rather than to a memory of what I did.
+- Difficulties: the 11-01 entry is why this log is worth keeping — the corrective action was written down a week before it was true, and only a later read caught it.
+- What changed: the log entry for 2026-11-19 records the correction itself, including that the earlier note was misleading, rather than quietly editing history.
 
 ---
 
 ## Pull Request
 
-**PR Link:** [GitHub PR URL when opened]
+**PR Link:** not opened yet — planned for unit 7, after the patch and the ship-gate.
 
-**PR Description:** [what the PR says; much of the content above
-adapts into it]
+**PR Description:** not written yet. The planned shape is one small PR (PR 1 from the implementation plan): drop the redundant `chdir` calls in `perf_test_cluster.py` and pass `cwd=self.work_dir`, with the before/after reproduction and the targeted `pytest` output in the body, plus an AI-assistance disclosure required by the OpenSearch policy.
 
 **Maintainer Feedback:**
 
-- [Date]: [feedback received, or "none yet"; silence is a normal
-  state and costs you nothing]
-- [Date]: [how you addressed it]
+- 2026-11-18: claim posted with one question (does `WorkingDirectory` stay?). No reply yet — silence is a normal state and costs nothing.
 
-**Status:** [Awaiting review / Iterating / Merged / Closed. The
-status is a fact you record, never a grade: the PR is graded as
-opened.]
+**Status:** Not opened yet. No PR exists, so no review state to record.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: none yet — pr-precheck (installed, wild scope) will grade the title and body before the PR opens, and the ship-gate hook will run it automatically.
+- What it produced: nothing yet; there is no branch and no draft body.
+- Difficulties: none met yet; the known risk is that the org policy rejects oversized PRs, so this plan keeps PR 1 to two files.
+- What changed: nothing yet.
 
 ---
 
@@ -228,25 +248,21 @@ opened.]
 
 **Technical Skills Gained**
 
-[What you learned technically, named concretely.]
+Working-directory semantics: how `subprocess.run(..., cwd=)` differs from `os.chdir()`, why `chdir` is process-wide and visible to every thread, and how a context manager that saves and restores cwd still leaks while it is open. I also learned the shape of this repo's test workflow — `pipenv` environments, `pytest` layout mirroring `src/`, pre-commit running isort/flake8/mypy — and that `execute()` was already the right API, which turned a vague "refactor" into a call-site migration.
 
 **Challenges Overcome**
 
-[What was hard and how you solved it; point at the real events, the
-Toolkit blocks above are full of them.]
+The real challenge was not the code, it was keeping claims true. My first accepted issue was taken within a day; my rubric accepted a closed issue because it lacked a state check; and my search strategy still contained the queries my notes said I had replaced. Each was caught by re-reading the artifact instead of trusting the note, and each produced a specific fix: the state row, the pre-claim re-check, the difficulty note, and the `--owner` rewrite.
 
 **What I'd Do Differently Next Time**
 
-[Reflection on your process.]
+Check the linked-PR state on the same day I claim, not the day I grade. Treat "I changed X" as a claim to verify by opening X before writing it into a story. And write the difficulty note before claiming rather than after, because naming the open edge (`does WorkingDirectory stay?`) changed my claim from "assign me" to a question the maintainer can answer in one line.
 
 ---
 
 ## Resources Used
 
-[What actually helped, not a reading list. List things this story
-already shows you using: the doc you followed to set the environment
-up, the thread that explained the bug, the person who answered you.
-One real entry beats ten plausible ones.]
-
-- [Link to documentation that helped]
-- [Discussion, issue, or post that helped]
+- [OpenSearch contributing guide](https://github.com/opensearch-project/.github/blob/main/CONTRIBUTING.md) — DCO sign-off requirement, license headers, and the AI Usage Policy section I quote in my claim.
+- [Issue #775](https://github.com/opensearch-project/opensearch-build/issues/775) and [PR #772](https://github.com/opensearch-project/opensearch-build/pull/772) — the original request and the merged change that added `WorkingDirectory`, which is what made the design question concrete.
+- [`src/system/execute.py`](https://github.com/opensearch-project/opensearch-build/blob/main/src/system/execute.py) — the `execute(command, dir)` signature that made the whole issue tractable.
+- [`DEVELOPER_GUIDE.md`](https://github.com/opensearch-project/opensearch-build/blob/main/DEVELOPER_GUIDE.md) — the `pipenv run pytest` / pre-commit commands I copied into my testing strategy and `CLAUDE.local.md`.
