@@ -11,7 +11,7 @@ files and no evidence uploads are part of Assignment 5.
 **Student:** An Dang
 **GitHub Username:** Unheat
 **Issue:** https://github.com/opensearch-project/opensearch-build/issues/775
-**Pull Request:** not opened yet — planned for unit 7, after the patch and the ship-gate.
+**Pull Request:** drafted, not opened yet — branch `fix/775-remove-redundant-chdir` is committed locally and gate-passed; see the Pull Request section below.
 
 One repository, built across units 5 to 8, telling the whole story of your real
 contribution. Fill it as you work, not at the end — the sections below ask for evidence that
@@ -36,7 +36,9 @@ I built the issue-scout skill by pairing broad GitHub CLI searches with determin
 
 I installed the voice guard as a PreToolUse hook over every outgoing `gh` body, promoted the three carried-forward voice guides into one canonical guide at `~/.claude/voice-guard/voice-guide.md`, and wrote the upstream section myself: claim, question and ping rules, each with a wrong/right pair. The wiring test passed in the way it is supposed to - the guard stopped a body-less `gh issue comment --help` with "no body the guard can read" - and the manual check on my real claim draft came back pass, which is how I knew the guide was binding rather than decorative. The memory file was the smaller job: I read `CONTRIBUTING.md` end to end first, then distilled only the conventions and the chdir/execute subsystem into `CLAUDE.local.md` (34 lines) and hid it with `.git/info/exclude` so it never enters the PR diff. The real correction was in the scout: my required `Issue scope` check rejected anything with an open edge, which is most honest wild work, so I replaced it with `scope-feasible` and moved the ambiguity into a difficulty note - `#775` came out **ambitious** because of one open design question (`WorkingDirectory`), and that question is now the first thing my claim asks.
 
-**Unit 7: not yet started — patch branch, ship-gate and gate manifest come next week.**
+**Unit 7: Shipping the patch — reproducer, plan gate, and a ship-gate that rejected me once**
+
+I built the patch branch in four gates rather than writing code first. The reproducer came first: a test file asserting `os.getcwd()` is unchanged after `PerfTestCluster.start()`, `PerfTestCluster.terminate()` and `PerfTestSuite.execute()`, committed on its own so it could fail against untouched source — 8 failed, 19 passed. That number is the whole point of the gate: a test that has never been red proves nothing. Then plan-check, which rejected my first plan for a real defect I had missed: `perf_test_suite.py:43` builds `work_dir` as `current_workspace + "/mensor/"` with a trailing slash, so the directory is `'/ws/mensor/'`, while my reproducer compared it to `'/ws/mensor'` as strings and would have failed after the fix for a reason that had nothing to do with the bug. The RED run never surfaced it because the `os.getcwd()` assertion fires first. I fixed the assertion to compare `os.path.realpath` on both sides — still a directory-identity test, still fails on any wrong directory — and recorded in the plan that the trailing slash stays, because normalizing it is a second unrelated change. plan-check round 2: accept. The implementation itself was 43 insertions and 55 deletions across four files, all inside `src/test_workflow/perf_test/`. The ship-gate then rejected it once on `description-fidelity`: my PR body said five existing tests now assert `cwd=`, but only two did — the other three just dropped their `os.chdir` patch. The check was right, and the fix was not to reword the claim but to make it true: I added the `cwd=` assertions to the three. Second gate run: PASS, seven checks. What I would carry forward: both rejections came from tools reading my artifact against the code, and both were about a gap between what I had written and what was actually there — the same failure family as the stale `search-strategy.md` in unit 6.
 
 **Unit 8: not yet started — PR monitor and playbook come in the final week.**
 
@@ -144,24 +146,24 @@ Convert call sites from implicit to explicit working directories, in separate sm
 - PR 2 (needs proof): `integ_test` suites, after a test shows `ScriptFinder` returns an absolute path so `os.path.exists(script)` does not depend on cwd.
 - PR 3 (only if the maintainer wants it): `WorkingDirectory`/`TemporaryDirectory` removal or narrowing, with the four runners that use `WorkingDirectory` migrated in the same PR.
 
-Deliberately **not** changing: the end-state of `perf_test_suite.execute()`'s `finally: os.chdir(self.current_workspace)` until I know which caller relies on the process ending in the workspace root. That line is a post-condition, not an accident, and deleting it in a "cleanup" PR would be silent behaviour change.
+Deliberately **not** changing in this PR: the two `integ_test` sites (they need proof first) and the `WorkingDirectory`/`TemporaryDirectory` contract (the maintainer question). — *superseded during unit 7: I had also planned to keep `perf_test_suite.execute()`'s `finally: os.chdir(...)`. The reproducer showed that line is itself the leak, and the enclosing `WorkingDirectory` already restores the directory, so it went. The deviation is recorded below.*
 
 **Implementation Plan**
 
-1. `src/test_workflow/perf_test/perf_test_cluster.py` — remove `os.chdir(self.work_dir)` from `start()` and `terminate()`; both already run the command with `cwd=`, so pass `cwd=self.work_dir`.
-2. `src/test_workflow/perf_test/perf_test_suite.py` — replace the `with WorkingDirectory(current_workspace)` wrapper with the `cwd=current_workspace` the calls already pass; keep the `finally` line and document why.
+1. `src/test_workflow/perf_test/perf_test_cluster.py` — remove `os.chdir(self.work_dir)` from `start()` and `terminate()`; pass `cwd=self.work_dir`, and build the CDK output path as `os.path.join(self.work_dir, self.output_file)` because `start()` read it relatively.
+2. `src/test_workflow/perf_test/perf_test_suite.py` — replace the `with WorkingDirectory(current_workspace)` wrapper with the `cwd=current_workspace` the calls already pass; the `finally` line went too (see Deviations).
 3. `src/test_workflow/integ_test/integ_test_suite_opensearch.py` and `..._dashboards.py` — add a test proving the script path is absolute, then drop the `chdir` at lines 100/103.
 4. `tests/` — update the affected fixtures to pass paths explicitly (or use `monkeypatch.chdir` where the fixture genuinely needs a directory), so no test depends on leaked cwd.
 5. Run the targeted suites, then the full suite, plus `flake8`/`mypy`; open PR 1 first, and reference this issue plus the maintainer question.
 
-Deviations: none yet — code work starts in unit 7. I will record each change here as it happens rather than batching at the end.
+Deviations: one, recorded rather than quietly fixed. I wrote above that `perf_test_suite.execute()`'s `finally: os.chdir(self.current_workspace)` would stay, on the reasoning that it was a post-condition some caller might rely on. The reproducer disproved that: after the fix the process was still left in `current_workspace`, which is the exact leak the issue describes, and the enclosing `WorkingDirectory` in `perf_test_runner_opensearch.py:44` already restores the directory. So the line went, and the "deliberately not changing" note above is marked superseded rather than deleted. Two further deviations came from gates rather than from me: plan-check rejected the plan over a trailing-slash assertion that would have failed for the wrong reason, and the ship-gate rejected the PR body for claiming `cwd=` assertions in five tests when three of them did not yet have any.
 
 **Toolkit**
 
-- Tool: plan-check (wild scope, installed in unit 6) — not run yet; the plan above is the draft it will grade before I post it on the issue in unit 7.
-- What it produced: nothing yet — the plan is written from the reproduction evidence and the call-site reading, not from the tool.
-- Difficulties: none yet; the honest gap is that plan-check has not seen this plan, so its rubric rows (bounded scope, traced analysis) are unverified.
-- What changed: nothing yet; when plan-check runs, any row it fails changes this section rather than being argued with.
+- Tool: plan-check (wild scope), run in live mode twice on 2026-11-21.
+- What it produced: `reject` then `accept`. Round 1 failed **startable** with a concrete finding — `perf_test_suite.py:43` builds `work_dir` as `current_workspace + "/mensor/"`, so the directory the `chdir` set is `'/ws/mensor/'` while my reproducer asserted `'/ws/mensor'` as a string; the RED run never reached that assertion because the `os.getcwd()` check fires first, so my "3 failed → all passed" claim would not have held.
+- Difficulties: the trailing slash is a real pre-existing wart. The tempting fix was to normalize `work_dir`, which would have quietly added an unrelated change to a `chdir` PR.
+- What changed: the reproducer now compares `os.path.realpath` on both sides — same directory-identity guarantee, no dependence on spelling — and the plan states explicitly that the trailing slash stays, with the reason. Round 2 accepted all four checks.
 
 ---
 
@@ -169,26 +171,67 @@ Deviations: none yet — code work starts in unit 7. I will record each change h
 
 Two halves, because "the fix works" and "nothing else broke" are different claims.
 
-**Half 1: the reproduction, re-run before and after.** The check is the same script from the Reproduction Process section: open a `WorkingDirectory` block, read `os.getcwd()` from a second thread, and assert the thread still sees the process's original directory after the change. Before: `thread sees chdir'd dir? True`. After: expected `False`, plus `grep -rc "os\.chdir" src` dropping from **9 occurrences in 6 files** to whatever remains (the helpers, if the maintainer keeps them). That is observable in the PR diff and does not depend on anyone trusting me.
+**Half 1: the reproduction, re-run before and after.** The check is `os.getcwd()` after each of the three methods, plus the `cwd=` each `check_call` received — moved from a hand-run script into `tests/tests_test_workflow/test_perf_workflow/perf_test/test_perf_cwd_isolation.py` so it runs on every future change rather than once by hand. Before: the thread sees the `chdir`'d directory, `thread sees chdir'd dir? True`. After: `False`, and `git grep -c "os\.chdir" HEAD -- src/` goes from 9 lines on `main` to 6 on the branch, the 4 helpers' internals among them. That is observable in the PR diff and does not depend on anyone trusting me.
 
-**Half 2: the repo's own checks.** From `CLAUDE.local.md` (CONTRIBUTING/DEVELOPER_GUIDE):
+**Half 2: the repo's own checks.** From `CLAUDE.local.md` (CONTRIBUTING/DEVELOPER_GUIDE), matching what `.github/workflows/python-tests.yml` and `.pre-commit-config.yaml` actually run:
 
 ```bash
-pipenv run pytest tests/tests_test_workflow/test_perf_workflow -q   # the suites I touch first
+pipenv run pytest tests/tests_test_workflow/test_perf_workflow/perf_test/ -q  # the suites I touch first
 pipenv run pytest                                                    # full suite
-pipenv run flake8 && pipenv run isort --check . && pipenv run mypy . # pre-commit's checks
+pipenv run isort --check . && pipenv run flake8 . && pipenv run mypy .  # pre-commit's checks
 ```
 
-The perf suites spawn `pipenv install` and real subprocesses, so I will run the two touched modules directly too, and paste the actual pass/fail summary rather than the word "tests pass".
+Both halves ran on 2026-11-21, on this machine, with `main` at `619c091` as the base. Every number below was copied from a run, not estimated.
 
-Honest status: **none of this has been run yet** — there is no patched branch, and a strategy section that shows green numbers today would be invented. The outputs land here and in the PR body when the patch exists.
+**Half 1: the reproduction, before and after.** The reproducer is `tests/tests_test_workflow/test_perf_workflow/perf_test/test_perf_cwd_isolation.py`, committed alone at `46ef274` so it could be run against untouched source. The check is `os.getcwd()` after each of the three methods, plus the `cwd=` each `check_call` received.
+
+Before — source restored from `main`, tests from the branch, so the fix is the only difference:
+
+```
+$ git checkout main -- src/ && pipenv run pytest tests/tests_test_workflow/test_perf_workflow/perf_test/ --tb=no
+8 failed, 19 passed, 1 warning in 0.22s
+```
+
+After — the branch:
+
+```
+$ pipenv run pytest tests/tests_test_workflow/test_perf_workflow/perf_test/ --tb=no
+27 passed, 1 warning in 0.22s
+```
+
+The eight failures were the three reproducer tests plus the five existing tests whose expectations the fix changes. The failure text is the defect in the issue's own words:
+
+```
+E   AssertionError: '/private/var/folders/.../tmphm6i3665/test_dir' != '/Users/.../opensearch-build'
+E    : start() moved the process's working directory instead of running the command in work_dir
+E   AssertionError: '/private/var/folders/.../tmpzjpjkk_r' != '/Users/.../opensearch-build'
+E    : execute() left the process in /private/var/.../tmpzjpjkk_r instead of /Users/.../opensearch-build
+```
+
+The `chdir` count is also observable without trusting me: `git grep -c "os\.chdir" HEAD -- src/` is 6 lines on this branch (4 are the helpers' own internals) against 9 on `main`.
+
+**Half 2: the repo's own checks**, run in a fresh shell without an activated virtualenv, which is what the ship-gate does row by row:
+
+```bash
+pipenv run pytest             # 1159 tests, exit 0
+pipenv run isort --check .    # exit 0
+pipenv run flake8 .           # exit 0
+pipenv run mypy .             # Success: no issues found in 440 source files
+pipenv run yamllint .         # exit 0
+```
+
+`main` baseline for the same commands: pytest 1156 tests exit 0, isort/flake8/mypy exit 0 (439 files). The counts move by exactly the three tests this PR adds, so nothing else changed shape.
+
+What this does **not** prove: that `cdk deploy` and the benchmark run still work. Those are patched out in the tests, so what is verified is the arguments passed and the process state left behind. That needs AWS credentials and is what the repo's own CI runs; saying otherwise would be a claim I cannot make.
+
+One finding worth recording: `pipenv install --deploy --dev` failed until Python 3.9 was installed (`uv python install 3.9`) and pipenv was pinned to 2023.6.12 — current pipenv refuses Python 3.9, and the lock file is old enough that `--deploy` checks its hash. The repo pins `python_version = "3.9"` in `Pipfile`, so this is a real setup cost, not a quirk of my machine.
 
 **Toolkit**
 
-- Tool: none yet — the commands come from the repo's `DEVELOPER_GUIDE.md` via my `CLAUDE.local.md`, not from a skill run.
-- What it produced: the command list above, copied from the guide rather than from memory.
-- Difficulties: the perf/integ suites are heavyweight (pipenv install, CDK, real clusters), so "run the tests" is not one command; I expect to run the touched modules first and the full suite last.
-- What changed: nothing yet; if a suite cannot run in this environment (no Docker/CDK), I will say which and why instead of claiming it passed.
+- Tool: `pytest` for the gate runs, the ship-gate's `check_gate.py` for the four repo checks.
+- What it produced: the two counts above (`8 failed` → `27 passed`), the full-suite numbers, and a cold-start recipe for the environment.
+- Difficulties: the Python 3.9 requirement, and one self-inflicted detour — my first version of the reproducer asserted a `cwd=` string that differed only by a trailing slash, which plan-check caught.
+- What changed: the reproducer now asserts directory identity via `realpath`, and the three `test_perf_test_suite.py` tests gained `cwd=` assertions the ship-gate pointed out were missing from my PR body.
 
 ---
 
@@ -214,33 +257,41 @@ Posted the claim (guard pass). Reproduced on `619c091`: 31 `os.chdir` occurrence
 
 Grader feedback said the Unit 5 note documented the symptom but never named the corrective action, and that a reader could not tell whether the bug was still live. Checking the file showed something worse than an omission: `search-strategy.md` still contained the four `stars:>1000` queries the story said I had replaced. Rewrote the queries with `--owner` scoping, added a dated "What changed, and why" block to the file, and removed the leftover template scaffolding from this story. Lesson: when a note says "I changed X", open X and check — the file is the evidence, the note is only a claim.
 
+**[2026-11-21]**
+
+Built the patch branch `fix/775-remove-redundant-chdir` in gates, not in one pass. Red first: `test_perf_cwd_isolation.py` committed alone at `46ef274`, then run against untouched source — 8 failed, 19 passed. Then the fix at `c29e8ac`: 43 insertions, 55 deletions across `perf_test_cluster.py`, `perf_test_suite.py` and their tests, 27 passed. Two things did not go to plan and both are recorded rather than smoothed over. plan-check rejected the plan because my reproducer asserted a `cwd=` string that differed from the real one only by a trailing slash, and the RED run never reached the assertion; the fix was `os.path.realpath` on both sides plus an explicit decision to leave `perf_test_suite.py:43` alone. The ship-gate then rejected the PR body because it claimed five existing tests assert `cwd=` when only two did; I added the assertions to the other three rather than softening the sentence. Also: `pipenv install --deploy --dev` would not run until I installed Python 3.9 and pinned pipenv 2023.6.12, which is the version the repo's `Pipfile` actually requires.
+
 **Toolkit**
 
-- Tool: `grep` and direct file reads, plus `gh` for the issue history.
-- What it produced: the five dated entries above, each tied to a file or command rather than to a memory of what I did.
-- Difficulties: the 11-01 entry is why this log is worth keeping — the corrective action was written down a week before it was true, and only a later read caught it.
-- What changed: the log entry for 2026-11-19 records the correction itself, including that the earlier note was misleading, rather than quietly editing history.
+- Tool: plan-check (2 rounds) and the ship-gate (`check_gate.py`), plus `pytest`/`isort`/`flake8`/`mypy` as the repo's own checks.
+- What it produced: `reject` → `accept` from plan-check, `STOP. description-fidelity` → `PASS` from the ship-gate, and a `ship-manifest.md` naming the four must-pass checks with the two excluded ones dated and reasoned.
+- Difficulties: both rejections were about the distance between what I wrote and what the code did — the same failure family as the stale `search-strategy.md` in unit 6. Neither was caught by re-reading my own prose; both needed a tool reading the artifact against the repo.
+- What changed: the reproducer's assertion strategy, the three `cwd=` assertions, and a plan deviation that stays visible instead of being edited away.
 
 ---
 
 ## Pull Request
 
-**PR Link:** not opened yet — planned for unit 7, after the patch and the ship-gate.
+**PR Link:** not opened yet. The branch `fix/775-remove-redundant-chdir` is built and committed locally at `c29e8ac`, and the PR body is drafted in `pr_draft.md`, but nothing is pushed and no PR exists. That is deliberate for this unit: the draft is reviewed before it goes public.
 
-**PR Description:** not written yet. The planned shape is one small PR (PR 1 from the implementation plan): drop the redundant `chdir` calls in `perf_test_cluster.py` and pass `cwd=self.work_dir`, with the before/after reproduction and the targeted `pytest` output in the body, plus an AI-assistance disclosure required by the OpenSearch policy.
+**PR Description:** drafted at `pr_draft.md` (kept out of the diff by `.git/info/exclude`). It follows the shape this repo's merged PRs use — Description, Related issue, Issues Resolved, Testing, Check List, AI disclosure, and the Apache-2.0 / DCO footer the org policy asks for — because the repo ships no `PULL_REQUEST_TEMPLATE.md`. It uses `Refs #775` rather than `Closes`, since this is PR 1 of 3, and states honestly that it removes 3 of the 5 `os.chdir` call sites in `src/` and what it does not prove (`cdk` deployment).
+
+Drafted title: **`perf_test: pass cwd= to cluster and suite subprocesses instead of os.chdir`**.
 
 **Maintainer Feedback:**
 
 - 2026-11-18: claim posted with one question (does `WorkingDirectory` stay?). No reply yet — silence is a normal state and costs nothing.
+- The unanswered question is why PR 3 exists as a separate, later decision rather than being folded into this one.
 
-**Status:** Not opened yet. No PR exists, so no review state to record.
+**Status:** Drafted, gate-passed, not pushed. The ship-gate's last run reports `PASS` against the four manifest checks and all seven pr-precheck checks, valid for 30 minutes from that run. Pushing the branch and opening the PR are the two steps deliberately left for review.
 
 **Toolkit**
 
-- Tool: none yet — pr-precheck (installed, wild scope) will grade the title and body before the PR opens, and the ship-gate hook will run it automatically.
-- What it produced: nothing yet; there is no branch and no draft body.
-- Difficulties: none met yet; the known risk is that the org policy rejects oversized PRs, so this plan keeps PR 1 to two files.
-- What changed: nothing yet.
+- Tool: the ship-gate hook (`~/.claude/ship-gate/check_gate.py`) plus pr-precheck in live mode, run via the same hook the real `gh pr create` would trigger.
+- What it produced: `ship-gate: STOP. your own pr-precheck rejected fix/775-remove-redundant-chdir: verdict reject` on the first attempt, then `ship-gate: PASS` on the second, with the four repo checks run per row from `ship-manifest.md`.
+- Difficulties: the first rejection was `description-fidelity` — the body claimed the five existing tests assert `cwd=` when only the two cluster tests did. The other three only dropped their `os.chdir` patch. Fixing the sentence would have made the body true and the tests weaker; adding the assertions made both true.
+- What changed: three test methods gained a `cwd=` assertion, the PR body stopped generalising from two cases to five, and `test_evidence.md` gained the DCO check and the manifest-exclusion reasoning that the gate's advisory notes asked for.
+- One caveat I want on the record: the empty-manifest failure mode is real, but it fails safely. I checked on a throwaway repo with no manifest and the gate stopped with `no ship-manifest.md at /private/tmp/gate_test. Create it from the template and keep it out of your commits`, which is about setup rather than about the code. The dangerous version would be a gate that reports `PASS` with nothing to check; this one refuses to run.
 
 ---
 
@@ -258,6 +309,8 @@ The real challenge was not the code, it was keeping claims true. My first accept
 
 Check the linked-PR state on the same day I claim, not the day I grade. Treat "I changed X" as a claim to verify by opening X before writing it into a story. And write the difficulty note before claiming rather than after, because naming the open edge (`does WorkingDirectory stay?`) changed my claim from "assign me" to a question the maintainer can answer in one line.
 
+In unit 7 the same lesson showed up two more times, from tools rather than from me. plan-check rejected a plan whose reproducer would have failed for the wrong reason — a trailing slash, not a leaked cwd — and the ship-gate rejected a PR body that generalised "two tests assert `cwd=`" into "five tests assert `cwd=`". Both were caught by a reader comparing my words to the code, and neither would have been caught by re-reading my own prose. The transferable habit is not "check your work twice"; it is that the artifact and the claim about it drift apart, and the artifact is the one that is true.
+
 ---
 
 ## Resources Used
@@ -266,3 +319,5 @@ Check the linked-PR state on the same day I claim, not the day I grade. Treat "I
 - [Issue #775](https://github.com/opensearch-project/opensearch-build/issues/775) and [PR #772](https://github.com/opensearch-project/opensearch-build/pull/772) — the original request and the merged change that added `WorkingDirectory`, which is what made the design question concrete.
 - [`src/system/execute.py`](https://github.com/opensearch-project/opensearch-build/blob/main/src/system/execute.py) — the `execute(command, dir)` signature that made the whole issue tractable.
 - [`DEVELOPER_GUIDE.md`](https://github.com/opensearch-project/opensearch-build/blob/main/DEVELOPER_GUIDE.md) — the `pipenv run pytest` / pre-commit commands I copied into my testing strategy and `CLAUDE.local.md`.
+- [`.github/workflows/python-tests.yml`](https://github.com/opensearch-project/opensearch-build/blob/main/.github/workflows/python-tests.yml) and [`.pre-commit-config.yaml`](https://github.com/opensearch-project/opensearch-build/blob/main/.pre-commit-config.yaml) — the four checks I put in `ship-manifest.md`, read from the workflow rather than from memory.
+- [Python 3.9 release](https://www.python.org/downloads/release/python-3925/) and [pipenv 2023.6.12](https://github.com/pypa/pipenv/releases/tag/v2023.6.12) — the interpreter and tool version this repo's `Pipfile` requires; the current pipenv refuses Python 3.9.
