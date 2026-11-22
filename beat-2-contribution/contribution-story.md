@@ -299,7 +299,8 @@ Title: **`perf_test: pass cwd= to cluster and suite subprocesses instead of os.c
 
 **Maintainer Feedback:**
 
-- 2026-11-22: none yet. The PR has 0 comments and 0 reviews; `review decision: REVIEW_REQUIRED`, DCO already passing, one check still running. Both earlier thread comments (the claim on 2026-11-18, the reproduction report on 2026-11-22) also have no reply.
+- 2026-11-22: none yet from a maintainer. The PR has 0 human comments and 0 reviews; `review decision: REVIEW_REQUIRED`, DCO and both Code-Diff checks passing, `python-tests`/`yaml-lint`/`License Header Checker`/`Link Checker`/`groovy-tests` sitting in `action_required` because a first-time contributor's workflows need a maintainer to approve them.
+- 2026-11-22: automated review from PR-Agent, one "possible issue" claiming the removed `chdir` changes what `os.getcwd()` resolves to at `perf_test_suite.py:55`. Checked against the code: that line is byte-identical on both branches, sits outside every hunk, and the old `chdir` ran in `execute()`'s `finally` — after the command string was built. No behavior change, so no reply and no code change; the refutation and the real follow-up it surfaced are written up in Implementation Notes.
 - The open question I asked in the claim — whether `WorkingDirectory` itself should go — is still unanswered, which is why PR 3 is a separate decision and not folded into this one.
 
 **Status:** Awaiting review.
@@ -311,6 +312,19 @@ Title: **`perf_test: pass cwd= to cluster and suite subprocesses instead of os.c
 - Difficulties: the first rejection was `description-fidelity` — the body claimed the five existing tests assert `cwd=` when only the two cluster tests did. The other three only dropped their `os.chdir` patch. Fixing the sentence would have made the body true and the tests weaker; adding the assertions made both true.
 - What changed: three test methods gained a `cwd=` assertion, the PR body stopped generalising from two cases to five, and `test_evidence.md` gained the DCO check and the manifest-exclusion reasoning that the gate's advisory notes asked for.
 - One caveat I want on the record: the empty-manifest failure mode is real, but it fails safely. I checked on a throwaway repo with no manifest and the gate stopped with `no ship-manifest.md at /private/tmp/gate_test. Create it from the template and keep it out of your commits`, which is about setup rather than about the code. The dangerous version would be a gate that reports `PASS` with nothing to check; this one refuses to run.
+
+**[2026-11-22] — an automated review arrived, and its premise was wrong**
+
+PR-Agent commented on #6573 within a minute of opening, with one "possible issue" worth 7/10: that removing the `chdir` changes what `os.getcwd()` resolves to in `perf_test_suite.py:55`, where the command string falls back to `os.getcwd()` when `test_results_path is None`. I checked it instead of taking it. The line is byte-identical on `main` and on my branch (it only moved from 56 to 55 because the removed import shifted it), it sits outside both hunks of my diff (`@@ -15 +14,0 @@` and `@@ -63,10 +62,6 @@`), and the old `os.chdir` was the last statement of `execute()`'s `finally` — after `__init__` had already evaluated `os.getcwd()` when it built the command. So the value captured is the same before and after: the process's cwd at construction time, which was never the `chdir`'d directory. The bot's own "Why" note says as much — "which happens before any chdir. So the behavior may not have actually changed" — so its headline and its reasoning disagree. I did not reply, because arguing with a bot's optional suggestion on someone else's repo is noise.
+
+It did surface something real, though, and I am keeping it: that `os.getcwd()` fallback is a third instance of the same problem #775 is about — the process's working directory used as an implicit parameter. It is out of scope here, because changing it moves where results are written, which is a behavior change rather than a redundant call site, and my plan commits to leaving it. It belongs in the PR that takes on `WorkingDirectory`/`TemporaryDirectory`, where the contract of the implicit directory is already the subject.
+
+**Toolkit**
+
+- Tool: `gh pr view --json comments` and `git diff -U0`, to check the bot's claim against the code rather than against its confidence.
+- What it produced: the finding that the flagged line is outside every hunk and identically evaluated before and after, plus a real follow-up candidate for PR 3.
+- Difficulties: none technical. The temptation was the one worth naming — a 7/10 "possible issue" from a review bot reads like a finding, and the cheap response is to accept it and "fix" a line my diff never touched.
+- What changed: nothing in the diff. The claim is recorded here with the evidence that refutes it, and the `os.getcwd()` fallback is written down as PR-3 scope so it is not lost.
 
 ---
 
