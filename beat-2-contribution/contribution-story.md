@@ -4,7 +4,7 @@
 **Student:** An Dang
 **GitHub Username:** Unheat
 **Issue:** https://github.com/opensearch-project/opensearch-build/issues/775
-**Pull Request:** not opened yet — branch `fix/775-remove-redundant-chdir` is built, committed and gate-passed locally; see the Pull Request section below.
+**Pull Request:** https://github.com/opensearch-project/opensearch-build/pull/6573
 
 ---
 
@@ -24,7 +24,16 @@ I installed the voice guard as a PreToolUse hook over every outgoing `gh` body, 
 
 I built the patch branch in four gates rather than writing code first. The reproducer came first: a test file asserting `os.getcwd()` is unchanged after `PerfTestCluster.start()`, `PerfTestCluster.terminate()` and `PerfTestSuite.execute()`, committed on its own so it could fail against untouched source — 3 failed, 24 passed, and 8 failed once the rewrite of the five existing tests was included. That red number is the whole point of the gate: a test that has never been red proves nothing. Then my workflow skill's plan gate, which rejected my first plan for a real defect I had missed: `perf_test_suite.py:43` builds `work_dir` as `current_workspace + "/mensor/"` with a trailing slash, so the directory is `'/ws/mensor/'`, while my reproducer compared it to `'/ws/mensor'` as strings and would have failed after the fix for a reason that had nothing to do with the bug. The RED run never surfaced it because the `os.getcwd()` assertion fires first. I fixed the assertion to compare `os.path.realpath` on both sides — still a directory-identity test, still fails on any wrong directory — and recorded in the plan that the trailing slash stays, because normalizing it is a second unrelated change. Round 2: accept. The implementation itself was 11 insertions and 18 deletions in `src/` plus the tests, 190/55 across five files in total, all inside `src/test_workflow/perf_test/`. The ship-gate then rejected it once on `description-fidelity`: my PR body said five existing tests now assert `cwd=`, but only two did — the other three just dropped their `os.chdir` patch. The check was right, and the fix was not to reword the claim but to make it true: I added the `cwd=` assertions to the three. Second gate run: PASS, seven checks. What I would carry forward: both rejections came from tools reading my artifact against the code, and both were about a gap between what I had written and what was actually there — the same failure family as the stale `search-strategy.md` in unit 6.
 
-### Unit 8: Not started — the PR monitor and playbook. The branch is built and gate-passed but not pushed, so there is no PR to monitor yet.
+### Unit 8: The PR monitor drafted a wait note on a PR that was 30 seconds old, and taught me my own nudge rule was unbuildable
+
+I opened PR #6573 and ran the monitor against it. It read 0 comments, 0 reviews, one pending check, and drafted a wait note rather than a nudge, because my playbook's 7-day threshold was measured against a thread that had been quiet for 30 seconds. I did not post it: a wait note is for me, not the thread. What it caught was worth more than the draft. My nudge rule said to tag the reviewer who last engaged, and this PR had no reviewer, so the rule had no answer for the exact case it would run in on day 7. I rewrote it to tag nobody when nobody has engaged, which is the honest version of the intent — the rule existed to stop me pulling in a maintainer who never touched the PR. It also gave me the date the threshold is next met (2026-11-29) instead of leaving me to work it out at the time.
+
+**Toolkit**
+
+- Tool: the PR monitor (`~/.claude/pr-monitor/monitor.py`) plus the playbook I wrote for this repo, run from the clone on the PR's branch.
+- What it produced: `--state` (checks, review decision, quiet time) and one drafted move — a wait note naming 2026-11-29 as the day my threshold is met, with the per-rule reasoning for why no nudge was justified yet.
+- Difficulties: the playbook's nudge rule was unwritable for a PR with no reviewer, which is the state every PR starts in; the monitor surfaced it by reporting that nobody had engaged, not by failing. Nothing else fell short — it read the PR correctly and refused to draft a nudge it could not justify.
+- What changed: nudge rule 1 now tags nobody when nobody has engaged, and the playbook's staleness number is backed by measured data rather than a guess — five non-member PRs in this repo merged after 2, 4, 4, 9 and 38 days, so 7 days sits a few days past the median.
 
 ---
 
@@ -282,24 +291,23 @@ Posted https://github.com/opensearch-project/opensearch-build/issues/775#issueco
 
 ## Pull Request
 
-**PR Link:** not opened yet. The branch `fix/775-remove-redundant-chdir` is built and committed locally at `a40a1f6`, and the PR body is drafted in `pr_draft.md`, but nothing is pushed and no PR exists. That is deliberate for this unit: the draft is reviewed before it goes public.
+**PR Link:** https://github.com/opensearch-project/opensearch-build/pull/6573 — opened 2026-11-22 against `main` from `Unheat:fix/775-remove-redundant-chdir`, on the upstream repo rather than the fork. 5 files, +190/−55, two commits (`a8f360c` reproducer, `a40a1f6` fix), DCO pass.
 
-**PR Description:** drafted at `pr_draft.md` (kept out of the diff by `.git/info/exclude`). It follows the shape this repo's merged PRs use — Description, Related issue, Issues Resolved, Testing, Check List, AI disclosure, and the Apache-2.0 / DCO footer the org policy asks for — because the repo ships no `PULL_REQUEST_TEMPLATE.md`. It uses `Refs #775` rather than `Closes`, since this is PR 1 of 3, and states honestly that it removes 3 of the 5 `os.chdir` call sites in `src/` and what it does not prove (`cdk` deployment).
+**PR Description:** the body is in the PR itself rather than summarised here. It follows the shape this repo's merged PRs use — Description, Related issue, Issues Resolved, Testing, Check List, AI disclosure, Apache-2.0 / DCO footer — because the repo ships no `PULL_REQUEST_TEMPLATE.md`. It says `Refs #775` and not `Fixes #775`, and says why in the body: `Fixes` would close a five-year-old tracker while the two `integ_test` call sites are still open, and the issue should stay open until the third PR lands. It states plainly that it removes 3 of the 5 `os.chdir` call sites in `src/` and does not prove `cdk deploy`.
 
-Drafted title: **`perf_test: pass cwd= to cluster and suite subprocesses instead of os.chdir`**.
+Title: **`perf_test: pass cwd= to cluster and suite subprocesses instead of os.chdir`**.
 
 **Maintainer Feedback:**
 
-- 2026-11-18: claim posted with one question (does `WorkingDirectory` stay?). No reply yet — silence is a normal state and costs nothing.
-- 2026-11-22: reproduction report posted in the same thread (https://github.com/opensearch-project/opensearch-build/issues/775#issuecomment-7076311129), which also carries a correction to the claim's `WorkingDirectory` attribution. No maintainer reply between the two comments.
-- The unanswered question is why PR 3 exists as a separate, later decision rather than being folded into this one.
+- 2026-11-22: none yet. The PR has 0 comments and 0 reviews; `review decision: REVIEW_REQUIRED`, DCO already passing, one check still running. Both earlier thread comments (the claim on 2026-11-18, the reproduction report on 2026-11-22) also have no reply.
+- The open question I asked in the claim — whether `WorkingDirectory` itself should go — is still unanswered, which is why PR 3 is a separate decision and not folded into this one.
 
-**Status:** Drafted, gate-passed, not pushed. The ship-gate's last run reports `PASS` against the four manifest checks and all seven pr-precheck checks, valid for 30 minutes from that run. Pushing the branch and opening the PR are the two steps deliberately left for review.
+**Status:** Awaiting review.
 
 **Toolkit**
 
 - Tool: the ship-gate hook (`~/.claude/ship-gate/check_gate.py`) plus pr-precheck in live mode, run via the same hook the real `gh pr create` would trigger.
-- What it produced: `ship-gate: STOP. your own pr-precheck rejected fix/775-remove-redundant-chdir: verdict reject` on the first attempt, then `ship-gate: PASS` on the second, with the four repo checks run per row from `ship-manifest.md`.
+- What it produced: `ship-gate: STOP. your own pr-precheck rejected fix/775-remove-redundant-chdir: verdict reject` on the first attempt, then `ship-gate: PASS` on the second and third, with the four repo checks run per row from `ship-manifest.md`. The final run before opening was clean on all seven pr-precheck rows.
 - Difficulties: the first rejection was `description-fidelity` — the body claimed the five existing tests assert `cwd=` when only the two cluster tests did. The other three only dropped their `os.chdir` patch. Fixing the sentence would have made the body true and the tests weaker; adding the assertions made both true.
 - What changed: three test methods gained a `cwd=` assertion, the PR body stopped generalising from two cases to five, and `test_evidence.md` gained the DCO check and the manifest-exclusion reasoning that the gate's advisory notes asked for.
 - One caveat I want on the record: the empty-manifest failure mode is real, but it fails safely. I checked on a throwaway repo with no manifest and the gate stopped with `no ship-manifest.md at /private/tmp/gate_test. Create it from the template and keep it out of your commits`, which is about setup rather than about the code. The dangerous version would be a gate that reports `PASS` with nothing to check; this one refuses to run.
