@@ -54,6 +54,8 @@ I chose it to learn how a real Python CLI/build codebase threads a working direc
 
 **Claim:** https://github.com/opensearch-project/opensearch-build/issues/775#issuecomment-6999931973
 
+**Reproduction report:** https://github.com/opensearch-project/opensearch-build/issues/775#issuecomment-7076311129 — posted 2026-11-22, and the only other comment in the thread besides the claim. It reports the inventory on `main` at `619c091`, a thread reading the `chdir`'d directory, and a correction to the claim's `WorkingDirectory` provenance that I got wrong twice.
+
 **Toolkit**
 
 - Tool: issue-scout — my search strategy and rubric, used to scan and grade the Issue Selection candidates, then to re-grade after the rubric fix, again when `#113040` was taken, and a third time after I patched the scope check.
@@ -105,6 +107,7 @@ macOS 27.0.1 (Darwin, arm64), CPython 3.12.12, and `opensearch-project/opensearc
 
 **Reproduction Evidence**
 
+- **Posted reproduction report:** https://github.com/opensearch-project/opensearch-build/issues/775#issuecomment-7076311129 (2026-11-22) — the artifact the claim promised, kept to ~60 lines so the thread stays readable. Link to the comment, not to a file in this repo: the comment is the thing a maintainer reads.
 - **Commit showing reproduction:** none — the report is against upstream `main` at `619c091`; the branch and commit come with the first patch.
 - **Screenshots/logs:** terminal output, verbatim, macOS 27.0.1 / Python 3.12.12:
 
@@ -280,6 +283,17 @@ All four were fixed rather than argued with: the tool is now named in `plan-comm
 - Difficulties: I had been running a four-check rubric where the course specified six, and calling that "the plan gate" throughout this story. Nothing failed loudly — the substitute rubric was stricter on some rows and simply silent on `thread-direction` and `repo-policy`.
 - What changed: the two missing checks are now graded and recorded, and four artifacts carry corrections (tool name in `plan-comment.md`, `:23` for `cwd=dir`, #314/#678 for the `WorkingDirectory` provenance, a properly pinned repro step, plus a runnable repro snippet and a `realpath` note that the second pass demanded).
 
+**[2026-11-22] — posted the reproduction report**
+
+Posted https://github.com/opensearch-project/opensearch-build/issues/775#issuecomment-7076311129, the artifact the claim promised eight days earlier. It is the thread's second comment and the only substantive one after the claim. Two decisions shaped it. First, I posted the trimmed 59-line `repro-comment.md` rather than the 103-line `repro-draft.md`: the draft exists to hold every artifact and form field the story template wants, and a five-year-old issue thread is not the place for that. Second, I did not post the plan. Nothing in the course or in the thread asks for one, this is a `good first issue` with a 29-line `src/` change, and `plan-check`'s own deviation rule means a posted plan that the diff later diverges from costs a second comment to reconcile. The PR body carries the approach where maintainers actually read it.
+
+**Toolkit**
+
+- Tool: `gh issue comment --body-file`, with `check_voice.py --draft repro-comment.md` run first, because the voice guard's PreToolUse hook is wired for Claude Code and this post went through the shell.
+- What it produced: a 3,803-character comment carrying the inventory, the thread demonstration, and the attribution correction; nothing else in the thread changed.
+- Difficulties: the gate that mattered here was not the rubric. `repro-check` had already returned `accept` on all five rows against the 103-line draft, and it still returned `accept` against the trimmed one while calling out three real defects — the double-wrong attribution, a `True` that only reproduces through `realpath` on macOS, and an unreachable `__pycache__` aside. The verdict was the least useful thing it said.
+- What changed: the comment now names #314 as the creator of `WorkingDirectory` and #678 as the rename, ships a runnable snippet, and explains the symlink comparison; the voice guide gained a rule about verifying an attribution with `--diff-filter=A` before naming a PR, because the guide's own Right example was teaching the #772 error.
+
 ---
 
 ## Pull Request
@@ -293,6 +307,7 @@ Drafted title: **`perf_test: pass cwd= to cluster and suite subprocesses instead
 **Maintainer Feedback:**
 
 - 2026-11-18: claim posted with one question (does `WorkingDirectory` stay?). No reply yet — silence is a normal state and costs nothing.
+- 2026-11-22: reproduction report posted in the same thread (https://github.com/opensearch-project/opensearch-build/issues/775#issuecomment-7076311129), which also carries a correction to the claim's `WorkingDirectory` attribution. No maintainer reply between the two comments.
 - The unanswered question is why PR 3 exists as a separate, later decision rather than being folded into this one.
 
 **Status:** Drafted, gate-passed, not pushed. The ship-gate's last run reports `PASS` against the four manifest checks and all seven pr-precheck checks, valid for 30 minutes from that run. Pushing the branch and opening the PR are the two steps deliberately left for review.
