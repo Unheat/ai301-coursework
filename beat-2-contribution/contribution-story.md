@@ -1,46 +1,30 @@
 # Contribution: Remove all os.chdir in favor of cwd/working directory in execute
 
-Path: `beat-2-contribution/contribution-story.md`
-
-This file is Assignment 5, and it is graded at the path above; a copy kept anywhere else in
-the repository is not read. **Keep every section header below under its exact name** — the
-format criteria grade exactly that. Your course repo link is the whole submission: no tool
-files and no evidence uploads are part of Assignment 5.
-
-**Contribution Number:** [1]
+**Contribution Number:** 1
 **Student:** An Dang
 **GitHub Username:** Unheat
 **Issue:** https://github.com/opensearch-project/opensearch-build/issues/775
-**Pull Request:** drafted, not opened yet — branch `fix/775-remove-redundant-chdir` is committed locally and gate-passed; see the Pull Request section below.
-
-One repository, built across units 5 to 8, telling the whole story of your real
-contribution. Fill it as you work, not at the end — the sections below ask for evidence that
-is far easier to write down as it happens than to reconstruct in the last weekend.
-
-Contribution Number stays `[1]` unless you make more than one contribution this term; it
-just numbers them.
+**Pull Request:** not opened yet — branch `fix/775-remove-redundant-chdir` is built, committed and gate-passed locally; see the Pull Request section below.
 
 ---
 
 ## Toolkit
 
-Every section from Why I Chose This Issue through Pull Request ends with a Toolkit block: which tool did that phase's work, what it produced, what fought it, and what changed because of it. Below the blocks, one dated entry per week of tool work.
+One contribution across units 5 to 7: the scout that found the issue, the voice guard and repo memory that shaped how I wrote upstream, and the patch itself. Every section below carries a Toolkit block for the phase it belongs to; the unit summaries here are the same week's tool work seen on a timeline. Unit 8 is empty because the PR is not open yet, so there is nothing for a monitor to read.
 
-All four entries are graded. Keep every heading, fill each in the week it belongs to.
-
-**Unit 5: Building and tuning the issue-scout across GitHub and tracker candidates**
+### Unit 5: Building and tuning the issue-scout across GitHub and tracker candidates
 
 I built the issue-scout skill by pairing broad GitHub CLI searches with deterministic ranking filters and Claude-driven rubric grading. During the first wild scan, passing `stars:>1000` to `gh search issues` broke because GitHub's issue search has no repository-stars filter and treated "1000" as a literal keyword — four of the top five results were literally issue `#1000` in repos with 1–80 stars. The fix is in `search-strategy.md` and it is visible there: every star term is gone, replaced by `--owner`-scoped queries (`pytorch`, `vllm-project`, `opensearch-project`, `backstage`) plus one keyword fallback, and star count moved out of search entirely into grading time, because the search result object has no star field. Direct grading on tracker picks caught unmerged pull requests on three seemingly open Backstage issues, preventing duplicate work. Grading the Issue Selection candidates then exposed a real gap: the scout accepted a closed issue (`pytorch/pytorch#97469`) because the rubric had no state check, so I added a required "Issue still open and unfixed" check plus an "Issue state" row to the evidence guide, kept the 20-bundle eval at 20/20, and re-graded to leave `pytorch/pytorch#113040` accepted.
 
-**Unit 6: Voice guard, repo memory, and a scope check that stopped rejecting the wild**
+### Unit 6: Voice guard, repo memory, and a scope check that stopped rejecting the wild
 
 I installed the voice guard as a PreToolUse hook over every outgoing `gh` body, promoted the three carried-forward voice guides into one canonical guide at `~/.claude/voice-guard/voice-guide.md`, and wrote the upstream section myself: claim, question and ping rules, each with a wrong/right pair. The wiring test passed in the way it is supposed to - the guard stopped a body-less `gh issue comment --help` with "no body the guard can read" - and the manual check on my real claim draft came back pass, which is how I knew the guide was binding rather than decorative. The memory file was the smaller job: I read `CONTRIBUTING.md` end to end first, then distilled only the conventions and the chdir/execute subsystem into `CLAUDE.local.md` (34 lines) and hid it with `.git/info/exclude` so it never enters the PR diff. The real correction was in the scout: my required `Issue scope` check rejected anything with an open edge, which is most honest wild work, so I replaced it with `scope-feasible` and moved the ambiguity into a difficulty note - `#775` came out **ambitious** because of one open design question (`WorkingDirectory`), and that question is now the first thing my claim asks.
 
-**Unit 7: Shipping the patch — reproducer, plan gate, and a ship-gate that rejected me once**
+### Unit 7: Shipping the patch — reproducer, plan gate, and a ship-gate that rejected me once
 
 I built the patch branch in four gates rather than writing code first. The reproducer came first: a test file asserting `os.getcwd()` is unchanged after `PerfTestCluster.start()`, `PerfTestCluster.terminate()` and `PerfTestSuite.execute()`, committed on its own so it could fail against untouched source — 3 failed, 24 passed, and 8 failed once the rewrite of the five existing tests was included. That red number is the whole point of the gate: a test that has never been red proves nothing. Then my workflow skill's plan gate, which rejected my first plan for a real defect I had missed: `perf_test_suite.py:43` builds `work_dir` as `current_workspace + "/mensor/"` with a trailing slash, so the directory is `'/ws/mensor/'`, while my reproducer compared it to `'/ws/mensor'` as strings and would have failed after the fix for a reason that had nothing to do with the bug. The RED run never surfaced it because the `os.getcwd()` assertion fires first. I fixed the assertion to compare `os.path.realpath` on both sides — still a directory-identity test, still fails on any wrong directory — and recorded in the plan that the trailing slash stays, because normalizing it is a second unrelated change. Round 2: accept. The implementation itself was 11 insertions and 18 deletions in `src/` plus the tests, 190/55 across five files in total, all inside `src/test_workflow/perf_test/`. The ship-gate then rejected it once on `description-fidelity`: my PR body said five existing tests now assert `cwd=`, but only two did — the other three just dropped their `os.chdir` patch. The check was right, and the fix was not to reword the claim but to make it true: I added the `cwd=` assertions to the three. Second gate run: PASS, seven checks. What I would carry forward: both rejections came from tools reading my artifact against the code, and both were about a gap between what I had written and what was actually there — the same failure family as the stale `search-strategy.md` in unit 6.
 
-**Unit 8: not yet started — PR monitor and playbook come in the final week.**
+### Unit 8: Not started — the PR monitor and playbook. The branch is built and gate-passed but not pushed, so there is no PR to monitor yet.
 
 ---
 

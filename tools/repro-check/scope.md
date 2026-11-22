@@ -1,46 +1,44 @@
-# Scope: where your issue lives, and the rules of the room
+# Scope: where your issue lives now (the wild)
 
 <!--
-This file is the skill's field of view, live mode only: in eval mode
-the bundle is the whole world and this file is ignored. The rubric
-(rubric.md) decides whether a package is READY; the scope decides which
-issues a package may belong to at all, and what the house rules are
-where that issue lives.
+This is the real-world scope for repro-check. It replaces the unit-2
+sandbox scope.md in your INSTALLED skill (the unit 6 Assignment
+tab has the copy command): the field is no longer the Path Review repo, and the
+classroom house rules do not travel. Like every scope file, this one
+says where the skill works, live mode only: the rubric (rubric.md)
+decides whether a package or a claim draft is READY; the scope
+decides which issues the skill may work against at all, and what the
+rules are where that issue lives. Eval runs never read this file.
 
-Staff wrote this file. It ships filled; you do not edit it this week.
+Staff wrote this file. It ships filled; there is nothing to edit.
 -->
 
 ## Where your issue lives
 
-Only issues in the course's Path Review repository are in scope this
-week:
+Any public repository, one issue at a time: the issue your claim
+names. That issue comes to you through your own evidence trail, the
+scout's saved read-out (a site pick graded in direct mode, usually
+saved in `~/.claude/skills/issue-scout/scan-output.md`, or a scan's
+top five). Do not grade
+drafts or packages for an issue your scout never graded.
 
-- Repo: `<ORG>/<PATH-REVIEW-REPO>` <!-- paste your section's repo from the Unit 1 Assignment tab -->
+## The wild's rules (the sandbox rules do not travel)
 
-If the repo line above still reads as a bracketed placeholder, your
-cohort's copy has not been finalized: stop and ask your instructor for
-the Path Review repo link before running live mode. Eval runs never
-read this file, so the harness and the eval bar work either way.
+Path Review was a classroom with a coordination channel. Out here
+the readers are strangers, and three rules flip:
 
-Your package must belong to your chosen issue from Unit 1 (or the
-house issue the instructor routed you to). Do not grade packages for
-issues in any other repository, however tempting; the wider GitHub
-comes later in the course.
-
-## Path Review house rules
-
-Path Review is a classroom, and your classmates are not strangers.
-Three rules are different here than in the wild:
-
-- **A classmate's claim does not block you.** Other students' claim
-  comments on your issue (and there may be several) do not make it
-  claimed. Post your own claim anyway; this course is the coordination
-  channel that strangers do not have.
-- **Post your own repro comment, even on a shared issue.** If a
-  classmate already posted a reproduction, yours still goes up. Never
-  piggyback ("same as above, can confirm"): your proof is your work,
-  produced from your environment, in your words.
-- **Credit attaches to the work you post, not to being first.** Course
-  credit rides on the pull request you will open and the comments you
-  post along the way, not on whether someone else got there earlier,
-  so a shared issue costs nobody anything.
+- **A stranger's claim blocks you.** A claim comment or an assignee
+  on an issue means someone got there first, and you have no channel
+  to coordinate with them. Never claim over one; pick again. First
+  claim stands, including yours: if a stranger claims after you, your
+  claim holds, and if you stop working, release your claim honestly
+  in the thread.
+- **Never piggyback, and never duplicate.** If the thread already
+  holds a reproduction, do not post "same here, can confirm". Add a
+  comment only when it carries something new from your environment,
+  in your words.
+- **The repo's own rules outrank yours.** CONTRIBUTING.md and any
+  stated contribution or AI policy are the standard you are held to
+  whether you read them or not. When a stated ask conflicts with a
+  course habit, the repo wins; say so in your evidence if it changes
+  what you do.

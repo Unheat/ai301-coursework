@@ -1,58 +1,50 @@
-# Scope: where your pull request lives, and the rules of the room
+# Scope: where your pull request lives, and the rules of the wild
 
 <!--
-This file is the tool's field of view, live mode only: in eval mode
-the bundle is the whole world and this file is ignored. The rubric
-(rubric.md) decides whether a PR package is READY; the scope decides
-which repos a pull request may target at all, and what the house
-rules are where it lands.
+Staff wrote this file, and there's nothing to edit. The ship-gate install
+copies it over ~/.claude/skills/pr-precheck/scope.md and keeps your
+sandbox scope beside it as scope.md.sandbox. The copy of pr-precheck in
+your course repo's tools/ folder isn't touched.
 
-Staff wrote this file. One line is yours: the `Repo:` line below,
-which you fill in with your Path Review repo. Leave the rest as it
-ships.
+A scope tells your tool which repos it may check and what rules apply
+there. Your rubric still decides whether a pull request is ready. Eval
+runs never read this file.
 -->
 
 ## Where your pull request lives
 
-Only pull requests against the course's Path Review repository are in
-scope this week:
+Any public repository. The sandbox is behind you: your pull request
+now lands in front of real maintainers, and asking a stranger to
+spend review time on your work is exactly what this tool exists to
+make safe.
 
-- Repo: codepath/pathreview-ai301-fa26-s3
+## Rules of the wild
 
-The repo line above ships as a bracketed placeholder; replacing it is
-part of installing the tool this unit. Your section's Path Review repo
-is shown in the install step of this unit's activity page on the course
-portal; if it is not there, ask your instructor before running live
-mode. Eval runs never read this file, so the harness and the eval bar
-work either way.
+The Path Review house rules do not travel. Out here:
 
-Your pull request must implement the plan you posted in week 3 (or the
-house plan the instructor routed you to), on the issue that plan
-belongs to. Do not grade PR packages for any other repository, however
-tempting; the wider GitHub opens next week.
-
-## Path Review house rules
-
-Path Review is a classroom, and your classmates are not strangers.
-The rules that were different here in weeks 2 and 3 stay different
-for the PR beat:
-
-- **PR from your own fork's branch.** Open the pull request from the
-  `fix/<issue-number>-<slug>` branch on your fork, against the
-  semester repo's default branch. Nobody pushes to the shared repo
-  directly.
-- **One PR per issue, per student.** Your PR delivers your posted
-  plan for your issue: one bounded change, one pull request. Follow-up
-  work is a new issue, not a growing PR.
-- **The template is always used.** Path Review ships a PR template;
-  every section gets real content, including the disclosure section
-  where it applies. The repo's stated asks are part of the bar, here
-  exactly as in the wild.
-- **A classmate's PR on a shared issue does not block yours.** Several
-  students may fix the same issue in parallel; open your own PR built
-  from your own plan and branch. This course is the coordination
-  channel that strangers do not have.
-- **Credit attaches to opening the PR.** Your grade rides on the
-  pull request you open and the standards it meets, never on whether
-  staff review, merge, or close it. What happens after you open it is
-  course operations, not assessment.
+- **The repo's conventions outrank the course's.** Branch names,
+  commit style, PR size, target branch: read the repo's contributing
+  docs and follow those. The `fix/<issue>-<slug>` habit is a good
+  default only where the repo states nothing.
+- **From your fork, always.** You have no push access to a stranger's
+  repository: the branch you ship lives on your fork of it, and the
+  pull request points from there at the branch the repo's contributing
+  docs name as the target (its default branch unless they say
+  otherwise; some repos take pull requests on `dev`).
+- **One PR per issue is now a courtesy to reviewers, not a course
+  rule.** If a maintainer asks you to split or combine work, the
+  maintainer is right.
+- **A parallel PR is a real cost.** In the sandbox, classmates on one
+  issue was coordination; out here, check the issue's linked PRs
+  before opening yours. If someone's fix is already up, review or
+  test theirs instead of racing it.
+- **Deviations go in the PR description.** Your plan is never posted
+  on the issue, so the PR description is the only place a maintainer
+  learns your approach. If your diff materially departs from your
+  plan, update `plan.md` and say what changed and why in the PR
+  description. No note on the issue thread is needed.
+- **Disclosure follows the repo's stated policy, always.** Your
+  coursework is AI-assisted by design; where a repo asks for AI-use
+  disclosure, the disclosure appears, in your own words, every time.
+  Where a repo bans AI-assisted contributions outright, that repo is
+  out of scope for course work: pick another issue.
