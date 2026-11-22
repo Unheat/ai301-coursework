@@ -183,23 +183,25 @@ pipenv run isort --check . && pipenv run flake8 . && pipenv run mypy .  # pre-co
 
 Both halves ran on 2026-11-21, on this machine, with `main` at `619c091` as the base. Every number below was copied from a run, not estimated.
 
-**Half 1: the reproduction, before and after.** The reproducer is `tests/tests_test_workflow/test_perf_workflow/perf_test/test_perf_cwd_isolation.py`, committed alone at `46ef274` so it could be run against untouched source. The check is `os.getcwd()` after each of the three methods, plus the `cwd=` each `check_call` received.
+**Half 1: the reproduction, before and after.** The reproducer is `tests/tests_test_workflow/test_perf_workflow/perf_test/test_perf_cwd_isolation.py`, committed alone at `a8f360c` so it could be run against untouched source. The check is `os.getcwd()` after each of the three methods, plus the `cwd=` each `check_call` received.
 
-Before — source restored from `main`, tests from the branch, so the fix is the only difference:
+Before — the reproducer commit alone, `src/` untouched at `main`:
 
 ```
-$ git checkout main -- src/ && pipenv run pytest tests/tests_test_workflow/test_perf_workflow/perf_test/ --tb=no
-8 failed, 19 passed, 1 warning in 0.22s
+$ pipenv run pytest tests/tests_test_workflow/test_perf_workflow/perf_test/ --tb=no
+3 failed, 24 passed, 1 warning in 0.26s
 ```
+
+And with `main`'s `src/` under the branch's test files, the five pre-existing tests the fix rewrites go red as well: `8 failed, 19 passed`.
 
 After — the branch:
 
 ```
 $ pipenv run pytest tests/tests_test_workflow/test_perf_workflow/perf_test/ --tb=no
-27 passed, 1 warning in 0.22s
+27 passed, 1 warning in 0.31s
 ```
 
-The eight failures were the three reproducer tests plus the five existing tests whose expectations the fix changes. The failure text is the defect in the issue's own words:
+The three failures at the reproducer commit are the reproducer itself; the other five appear only once the fix lands and the old `chdir` expectations stop holding. The failure text is the defect in the issue's own words:
 
 ```
 E   AssertionError: '/private/var/folders/.../tmphm6i3665/test_dir' != '/Users/.../opensearch-build'
@@ -259,7 +261,7 @@ Grader feedback said the Unit 5 note documented the symptom but never named the 
 
 **[2026-11-21]**
 
-Built the patch branch `fix/775-remove-redundant-chdir` in gates, not in one pass. Red first: `test_perf_cwd_isolation.py` committed alone at `46ef274`, then run against untouched source — 8 failed, 19 passed. Then the fix at `c29e8ac`: 43 insertions, 55 deletions across `perf_test_cluster.py`, `perf_test_suite.py` and their tests, 27 passed. Two things did not go to plan and both are recorded rather than smoothed over. plan-check rejected the plan because my reproducer asserted a `cwd=` string that differed from the real one only by a trailing slash, and the RED run never reached the assertion; the fix was `os.path.realpath` on both sides plus an explicit decision to leave `perf_test_suite.py:43` alone. The ship-gate then rejected the PR body because it claimed five existing tests assert `cwd=` when only two did; I added the assertions to the other three rather than softening the sentence. Also: `pipenv install --deploy --dev` would not run until I installed Python 3.9 and pinned pipenv 2023.6.12, which is the version the repo's `Pipfile` actually requires.
+Built the patch branch `fix/775-remove-redundant-chdir` in gates, not in one pass. Red first: `test_perf_cwd_isolation.py` committed alone at `a8f360c`, then run against untouched source — 3 failed, 24 passed. Then the fix at `a40a1f6`: 190 insertions, 55 deletions across `perf_test_cluster.py`, `perf_test_suite.py` and their tests, 27 passed, full suite 1159. Two things did not go to plan and both are recorded rather than smoothed over. plan-check rejected the plan because my reproducer asserted a `cwd=` string that differed from the real one only by a trailing slash, and the RED run never reached the assertion; the fix was `os.path.realpath` on both sides plus an explicit decision to leave `perf_test_suite.py:43` alone. The ship-gate then rejected the PR body because it claimed five existing tests assert `cwd=` when only two did; I added the assertions to the other three rather than softening the sentence. Also: `pipenv install --deploy --dev` would not run until I installed Python 3.9 and pinned pipenv 2023.6.12, which is the version the repo's `Pipfile` actually requires.
 
 **Toolkit**
 
@@ -272,7 +274,7 @@ Built the patch branch `fix/775-remove-redundant-chdir` in gates, not in one pas
 
 ## Pull Request
 
-**PR Link:** not opened yet. The branch `fix/775-remove-redundant-chdir` is built and committed locally at `c29e8ac`, and the PR body is drafted in `pr_draft.md`, but nothing is pushed and no PR exists. That is deliberate for this unit: the draft is reviewed before it goes public.
+**PR Link:** not opened yet. The branch `fix/775-remove-redundant-chdir` is built and committed locally at `a40a1f6`, and the PR body is drafted in `pr_draft.md`, but nothing is pushed and no PR exists. That is deliberate for this unit: the draft is reviewed before it goes public.
 
 **PR Description:** drafted at `pr_draft.md` (kept out of the diff by `.git/info/exclude`). It follows the shape this repo's merged PRs use — Description, Related issue, Issues Resolved, Testing, Check List, AI disclosure, and the Apache-2.0 / DCO footer the org policy asks for — because the repo ships no `PULL_REQUEST_TEMPLATE.md`. It uses `Refs #775` rather than `Closes`, since this is PR 1 of 3, and states honestly that it removes 3 of the 5 `os.chdir` call sites in `src/` and what it does not prove (`cdk` deployment).
 

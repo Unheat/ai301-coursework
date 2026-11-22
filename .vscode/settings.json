@@ -1,0 +1,7 @@
+{
+  "files.exclude": {
+    "**/.claude": false,
+    "**/.claude/**": false
+  },
+  "explorer.excludeGitIgnore": false
+}
